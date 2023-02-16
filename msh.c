@@ -42,12 +42,10 @@
 
 char* history[MAX_HISTORY_LENGTH]={};
 int hisPID[MAX_HISTORY_LENGTH]={};
-int savedPID=0;
-int historyCount=-1;
+int savedPID=0, historyCount=-1;
 
 void printHistory()
 {
-  //printf("Entering printHistory\n");
   int mod = historyCount % MAX_HISTORY_LENGTH;
   int i=0, count=0, top;
   for(i=mod; i>=0; i--)
@@ -62,7 +60,6 @@ void printHistory()
 
 void printPIDs()
 {
-  //printf("entering printPID\n");
   int mod = historyCount % MAX_HISTORY_LENGTH;
   int i=0, count=0, top;
   for(i=mod; i>=0; i--)
@@ -75,71 +72,15 @@ void printPIDs()
     printf("%d: %d\n",count++,hisPID[i]); 
 }
 
-//For outputting live pids. (Not used currently, also incomplete for that purpose)
-/* void printHistoryPID() {
-  int mod = historyCount % MAX_HISTORY_LENGTH;
-  int i=0, count=0, top;
-
-  int historyPID[MAX_HISTORY_LENGTH]={};
-  char* commands[MAX_HISTORY_LENGTH]={};
-  //printf("%d: %s\n",count++,history[i]);
-
-  //Get string from history index, strtok to get command of it,
-  // and exec the command name to get PID
-
-  char *temp = NULL;
-  for(i=mod; i>=0; i--) {
-    temp = strtok(history[i]," ");
-    printf("Got %s from history, at %d\n",temp,count);
-    commands[count++] = temp;
-  }
-
-  if(historyCount<MAX_HISTORY_LENGTH-1) top = historyCount;
-  else top = MAX_HISTORY_LENGTH-1;
-
-  for(i=top; i>mod; i--) {
-    temp = strtok(history[i]," ");
-    printf("Got %s from history, at %d\n",temp,count);
-    commands[count++] = temp;
-  }
-
-  pid_t pid = fork();
-
-  for(int i=0; i<=count; i++)
-  {
-    if( pid == 0 )
-    {
-      temp = commands[i];
-      int ret = execvp("pgrep",&temp);
-      printf("Ret was %d for %s\n",ret, temp);
-      historyPID[i] = ret;
-    }
-    else 
-    {
-      int status;
-      wait( & status );
-    }
-  }
-
-  for(i=0; i<=count; i++) {
-    printf("%d: %d\n",i,historyPID[i]);
-  }
-
-} */
-
-void savePID()
-{
-  hisPID[historyCount-1 % MAX_HISTORY_LENGTH] = savedPID;
-  savedPID=0;
-}
-
-//Add new commands entered to history[]
+//Add new commands executed to history[]
 void addToHistory(char x[MAX_COMMAND_SIZE])
 {
   strtok(x, "\n");
   history[++historyCount % MAX_HISTORY_LENGTH] = strdup(x);
-  //printf("Added %s to history at %d\n", x, historyCount%MAX_HISTORY_LENGTH);
-  savePID();
+
+  //Save PID
+  hisPID[historyCount-1 % MAX_HISTORY_LENGTH] = savedPID;
+  savedPID=0;
 }
 
 //Retrieve the actual index in history from the derived number output to user by printHistory
@@ -201,8 +142,7 @@ int main()
       token_count++;
     }
 
-
-    //Built in command handling
+    ////////Built in command handling
 
     if(token[0] == NULL)
       continue;
@@ -239,21 +179,18 @@ int main()
     }
     else if(strcmp(token[0], "history") == 0)
     {
-      //printf("Command was history\n");
-      //printf("token[1] == %s\n",token[1]);
       if(token[1] == NULL) {
         printHistory();
         continue;
       }
       else if(strcmp(token[1], "-p")==0)
       {
-        //printf("Command was history -p\n");
         printPIDs();
         continue;
       }
     } //Don't save history call to history[]
     else addToHistory(command_string);
-
+    //cd saved to history still to test item in history w/o PID
     if(strcmp(token[0],"cd") == 0 )
     {
       chdir(token[1]);
@@ -276,7 +213,6 @@ int main()
     else
     {
       savedPID = pid;
-      //printf("Saved PID %d for %s\n",pid, token[0]);
       int status;
       wait( & status );
     }
@@ -290,6 +226,5 @@ int main()
   }
 
   free( command_string );
-
   return 0;
 }
