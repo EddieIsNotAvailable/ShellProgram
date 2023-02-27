@@ -27,34 +27,32 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <dirent.h>
-#include <sys/stat.h>
 
 
 #define WHITESPACE " \t\n"
 #define MAX_COMMAND_SIZE 255
 #define MAX_NUM_ARGUMENTS 12
-#define MAX_HISTORY_LENGTH 15
+#define MAX_HISTORY_LENGTH 6
 
 char* history[MAX_HISTORY_LENGTH]={};
 int hisPID[MAX_HISTORY_LENGTH]={};
-int savedPID=0, historyCount=-1;
+int historyCount=-1;
 
 void printHistory()
 {
   int mod = historyCount % MAX_HISTORY_LENGTH;
   int i=0, count=0, top;
-  for(i=mod; i>=0; i--)
-    printf("%d: %s\n",count++,history[i]);
 
   if(historyCount<MAX_HISTORY_LENGTH-1) top = historyCount;
   else top = MAX_HISTORY_LENGTH-1;
 
-  for(i=top; i>mod; i--)
+  for(i=mod+1; i<=top; i++)
+    printf("%d: %s\n",count++,history[i]);
+
+  for(i=0; i<=mod; i++)
     printf("%d: %s\n",count++,history[i]);
 }
 
@@ -62,32 +60,32 @@ void printPIDs()
 {
   int mod = historyCount % MAX_HISTORY_LENGTH;
   int i=0, count=0, top;
-  for(i=mod; i>=0; i--)
-    printf("%d: %d\n",count++,hisPID[i]);
 
   if(historyCount<MAX_HISTORY_LENGTH-1) top = historyCount;
   else top = MAX_HISTORY_LENGTH-1;
 
-  for(i=top; i>mod; i--)
-    printf("%d: %d\n",count++,hisPID[i]); 
+  for(i=mod+1; i<=top; i++)
+    printf("%d: %d\n",count++,hisPID[i]);
+
+  for(i=0; i<=mod; i++)
+    printf("%d: %d\n",count++,hisPID[i]);
 }
 
-//Add new commands executed to history[]
-void addToHistory(char x[MAX_COMMAND_SIZE])
+void addToHis(char x[MAX_COMMAND_SIZE], int y)
 {
   strtok(x, "\n");
-  history[++historyCount % MAX_HISTORY_LENGTH] = strdup(x);
+  int index = ++historyCount % MAX_HISTORY_LENGTH;
+  history[index] = strdup(x);
 
   //Save PID
-  hisPID[historyCount-1 % MAX_HISTORY_LENGTH] = savedPID;
-  savedPID=0;
+  hisPID[index] = y;  
 }
 
 //Retrieve the actual index in history from the derived number output to user by printHistory
 int getFromHistory(int x)
 {
   int size;
-  if(historyCount > MAX_HISTORY_LENGTH-1) size = historyCount;
+  if(historyCount < MAX_HISTORY_LENGTH-1) size = historyCount;
   else size = MAX_HISTORY_LENGTH-1;
 
   if(x<0 || x>size)
@@ -95,48 +93,46 @@ int getFromHistory(int x)
     printf("Command not in history\n");
     return 0;
   }
-  else
-  {
+  
     int mod = historyCount % MAX_HISTORY_LENGTH;
-    for(int i=x; i>0; i--)
+    for(int i=x; i>=0; i--)
     {
-      if(mod-1 >= 0) mod--;
-      else mod = MAX_HISTORY_LENGTH-1;
+      if(mod+1 <= size) mod++;
+      else mod = 0;
     }
-    return mod;
-  }
+  return mod;
 }
 
 int main()
 {
-  char* command_string = (char*) malloc( MAX_COMMAND_SIZE );
+  char* command_string = (char*) malloc(MAX_COMMAND_SIZE);
 
   while( 1 )
   {
-    // Print out the prompt
-    printf ("msh> ");
+    //Print out the prompt
+    printf("msh> ");
 
     //Wait for command to read
-    while( !fgets (command_string, MAX_COMMAND_SIZE, stdin) );
+    while(!fgets(command_string, MAX_COMMAND_SIZE, stdin));
 
     char *token[MAX_NUM_ARGUMENTS];
 
-    for( int i = 0; i < MAX_NUM_ARGUMENTS; i++ )
+    for(int i=0; i<MAX_NUM_ARGUMENTS; i++ )
     {
       token[i] = NULL;
     }
 
     int token_count = 0;                                 
     char *argument_ptr = NULL;                                               
-    char *working_string  = strdup( command_string );
+    char *working_string  = strdup(command_string);
     char *head_ptr = working_string;
 
-    // Tokenize the input strings with whitespace used as the delimiter
-    while ( ( (argument_ptr = strsep(&working_string, WHITESPACE ) ) != NULL) && 
+    //Tokenize the input strings with whitespace used as the delimiter
+    while (((argument_ptr = strsep(&working_string, WHITESPACE)) != NULL) && 
               (token_count<MAX_NUM_ARGUMENTS))
     {
-      token[token_count] = strndup( argument_ptr, MAX_COMMAND_SIZE );
-      if( strlen( token[token_count] ) == 0 )
+      token[token_count] = strndup(argument_ptr, MAX_COMMAND_SIZE);
+      if(strlen(token[token_count]) == 0)
         token[token_count] = NULL;
       
       token_count++;
@@ -150,35 +146,40 @@ int main()
     if(strcmp(token[0],"quit") == 0 || strcmp(token[0],"exit") == 0)
       exit(0);
 
-    //Check first character of input, then 1 offset for number
+    //Note that command !n not directly added to history,
+    //  Will update command_string to the retreived command, and update history with that
+    //Check first character of input, 
     if(*command_string == '!')
     {
+      //1 offset to get number
       int num = atoi((command_string+1));
       
       //Get position in history array of num
       int temp = getFromHistory(num);
-      
-      for( int i = 0; i < MAX_NUM_ARGUMENTS; i++ )
+
+      for(int i=0; i<MAX_NUM_ARGUMENTS; i++)
         token[i] = NULL;
 
       token_count = 0;                                 
-      command_string = history[temp];
-      working_string = strdup( command_string );
+      command_string = strdup(history[temp]);
+      working_string = strdup(command_string);
       head_ptr = working_string;
 
-      // Tokenize the input strings with whitespace used as the delimiter
-      while ( ( (argument_ptr = strsep(&working_string, WHITESPACE ) ) != NULL) && 
+      //Tokenize the input strings with whitespace used as the delimiter
+      while (((argument_ptr = strsep(&working_string, WHITESPACE)) != NULL) && 
                 (token_count<MAX_NUM_ARGUMENTS))
       {
-        token[token_count] = strndup( argument_ptr, MAX_COMMAND_SIZE );
-        if( strlen( token[token_count] ) == 0 )
+        token[token_count] = strndup(argument_ptr, MAX_COMMAND_SIZE);
+        if(strlen(token[token_count]) == 0 )
           token[token_count] = NULL;
         
         token_count++;
       }
     }
-    else if(strcmp(token[0], "history") == 0)
+
+    if(strcmp(token[0], "history") == 0)
     {
+      addToHis(command_string,-1);
       if(token[1] == NULL) {
         printHistory();
         continue;
@@ -188,11 +189,11 @@ int main()
         printPIDs();
         continue;
       }
-    } //Don't save history call to history[]
-    else addToHistory(command_string);
-    //cd saved to history still to test item in history w/o PID
+    }
+    
     if(strcmp(token[0],"cd") == 0 )
     {
+      addToHis(command_string,-1);
       chdir(token[1]);
       continue;
     }
@@ -200,11 +201,11 @@ int main()
     //If command wasn't a built in, attempt to resolve as unix command with exec
     pid_t pid = fork( );
 
-    if( pid == 0 )
+    if(pid == 0)
     {
-      int ret = execvp( token[0], &token[0] );
+      int ret = execvp(token[0], &token[0]);
     
-      if( ret == -1 )
+      if(ret == -1)
       {
         printf("%s: Command not found.\n",token[0]);
         return 0;
@@ -212,19 +213,20 @@ int main()
     }
     else
     {
-      savedPID = pid;
+      //savedPID = pid;
       int status;
-      wait( & status );
+      wait(&status);
     }
+    addToHis(command_string,pid);
 
     // Cleanup allocated memory
-    for( int i = 0; i < MAX_NUM_ARGUMENTS; i++ )
-      if( token[i] != NULL )
-        free( token[i] );
+    for(int i=0; i<MAX_NUM_ARGUMENTS; i++)
+      if(token[i] != NULL)
+        free(token[i]);
     
-    free( head_ptr );
+    free(head_ptr);
   }
 
-  free( command_string );
+  free(command_string);
   return 0;
 }
