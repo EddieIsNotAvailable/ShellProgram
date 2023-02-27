@@ -35,7 +35,7 @@
 #define WHITESPACE " \t\n"
 #define MAX_COMMAND_SIZE 255
 #define MAX_NUM_ARGUMENTS 12
-#define MAX_HISTORY_LENGTH 6
+#define MAX_HISTORY_LENGTH 15
 
 char* history[MAX_HISTORY_LENGTH]={};
 int hisPID[MAX_HISTORY_LENGTH]={};
